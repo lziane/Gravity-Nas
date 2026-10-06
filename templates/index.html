@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="{{ user.theme }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="{{ '#0f172a' if user.theme == 'dark' else '#f8fafc' }}">
+    <meta name="description" content="GravityNAS — Votre espace de stockage personnel sécurisé">
+    <link rel="manifest" href="/static/manifest.json">
+    <title>GravityNAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css?v=2.7">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Persist theme for login page
+        localStorage.setItem('gravity_theme', '{{ user.theme }}');
+    </script>
+    <style>
+        #snake-reveal-overlay {
+            position: fixed; inset: 0; z-index: 100000; pointer-events: none;
+            display: grid; grid-template-rows: repeat(3, 1fr);
+            width: 100vw; height: 100vh;
+        }
+        .snake-bar-reveal {
+            background: var(--accent, #4f46e5); width: 100%; height: 100%;
+            transform: scaleX(1);
+            margin-top: -1px; height: calc(100% + 2px);
+            box-shadow: 0 0 80px rgba(0,0,0,0.4), 0 0 30px rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+    </style>
+</head>
+
+<body class="antialiased" id="main-body" data-theme="{{ user.theme }}" data-wallpaper="{{ user.wallpaper or '' }}">
+    <div id="snake-reveal-overlay">
+        <div class="snake-bar-reveal" style="transform-origin: left;"></div>
+        <div class="snake-bar-reveal" style="transform-origin: right;"></div>
+        <div class="snake-bar-reveal" style="transform-origin: left;"></div>
+    </div>
+    <script>
+        (function() {
+            const wp = document.getElementById('main-body').dataset.wallpaper;
+            if (wp && !wp.toLowerCase().endsWith('.mp4')) {
+                document.body.style.background = "url('" + wp + "') center/cover fixed no-repeat";
+            } else if (!wp) {
+                document.body.style.background = "var(--bg-secondary)";
+            }
+        })();
+    </script>
+
+
+
+    <div id="loading-bar" style="position:fixed;top:0;left:0;height:3px;background:var(--accent);width:0;z-index:9999;transition:width 0.3s ease, opacity 0.3s ease;opacity:0;"></div>
+
+{% if user.wallpaper and user.wallpaper.endswith('.mp4') %}
+<video autoplay loop muted playsinline id="bg-video"><source src="{{ user.wallpaper }}" type="video/mp4"></video>
+{% endif %}
+
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div class="app-layout">
+    <!-- ═══════════════ SIDEBAR ═══════════════ -->
+    <aside id="sidebar" class="w-64 glass rounded-2xl flex flex-col overflow-hidden anim-slideIn" style="flex-shrink:0">
+        <!-- Logo -->
+        <div class="h-14 flex items-center px-5 border-b border-[var(--border-glass)]">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white mr-3 shadow-md shadow-indigo-500/30">
+                <i class="fas fa-cube text-xs"></i>
+            </div>
+            <span class="font-extrabold tracking-tight text-[15px]" style="color:var(--text-primary)">GravityNAS</span>
+            {% if remote_url %}
+            <div class="ml-auto flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 anim-pulse-slow">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                <span class="text-[9px] font-bold text-green-500 uppercase tracking-wider">Live</span>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Nav -->
+        <div id="sidebar-nav" class="p-3 space-y-0.5 flex-1 overflow-y-auto">
+            <a href="/" class="spa-link flex items-center px-3 py-2 rounded-lg font-semibold text-[13px] transition-all" style="background:var(--accent);color:white">
+                <i class="fas fa-house mr-2.5 w-4 text-center text-[11px]"></i> Mon Stockage
+            </a>
+
+            {% for item in pinned_items %}
+                {% if loop.first %}
+                <div class="text-[10px] uppercase font-bold tracking-[0.12em] pt-5 pb-1.5 px-3" style="color:var(--text-muted)">Épinglés</div>
+                {% endif %}
+                <div class="relative group">
+                    <a href="/?path={{ item.path }}" data-favorite="true" data-favorite-path="{{ item.path }}" class="spa-link flex items-center px-3 py-2 rounded-lg text-[13px] font-medium transition-all hover:translate-x-0.5" 
+                       style="color:var(--text-secondary)" 
+                       onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background='transparent'"
+                       >
+                        <i class="fas fa-thumbtack mr-2.5 w-4 text-center text-[9px]" style="color:var(--accent)"></i>
+                        <span class="truncate">{{ item.name }}</span>
+                    </a>
+                    <button onclick="quickUnpin('{{ item.path }}')" class="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-6 h-6 rounded-md flex items-center justify-center transition-all" style="color:var(--text-muted)" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-muted)'">
+                        <i class="fas fa-times text-[9px]"></i>
+                    </button>
+                </div>
+            {% endfor %}
+
+            <div id="sidebarDropZone" class="mt-1.5 h-10 border-2 border-dashed rounded-lg flex items-center justify-center text-[9px] font-bold uppercase tracking-wider transition-all" 
+                 style="border-color:transparent;color:var(--text-muted)"
+                 >
+                <i class="fas fa-plus-circle mr-2"></i> Glisser pour épingler
+            </div>
+
+            <div class="text-[10px] uppercase font-bold tracking-[0.12em] pt-4 pb-1.5 px-3" style="color:var(--text-muted)">Système</div>
+            <a href="/?path=.Corbeille" class="spa-link flex items-center px-3 py-2 rounded-lg text-[13px] font-medium transition-all" 
+               style="color:var(--text-secondary)" 
+               onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background='transparent'"
+               >
+                <i class="fas fa-trash-alt mr-2.5 w-4 text-center text-[11px] text-red-400"></i> Corbeille
+            </a>
+
+            {% if user.role == "admin" or user.role == "superadmin" %}
+            <button onclick="showDialog('adminModal')" class="w-full flex items-center px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left" style="color:var(--text-secondary)" onmouseover="this.style.background='rgba(245,158,11,0.06)'" onmouseout="this.style.background='transparent'">
+                <i class="fas fa-users-cog mr-2.5 w-4 text-center text-[11px] text-amber-400"></i> Famille
+            </button>
+            {% endif %}
+        </div>
+
+        <!-- User footer -->
+        <div class="p-3 border-t" style="border-color:var(--border-glass)">
+            <div class="flex items-center p-2.5 rounded-xl cursor-pointer transition-all" style="background:var(--row-hover)" onclick="showDialog('settingsModal')" onmouseover="this.style.background='var(--bg-glass-hover)'" onmouseout="this.style.background='var(--row-hover)'">
+                {% if user.avatar %}
+                <img src="{{ user.avatar }}" class="w-9 h-9 rounded-full object-cover shadow-sm border-2 mr-3" style="border-color:var(--border-glass)">
+                {% else %}
+                <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm mr-3 shadow-md">
+                    {{ user.username[0]|upper }}
+                </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                    <div class="text-[13px] font-bold truncate" style="color:var(--text-primary)">{{ user.username }}</div>
+                    <div class="text-[10px] uppercase tracking-[0.1em] font-semibold" style="color:var(--text-muted)">{{ user.role }}</div>
+                </div>
+                <i class="fas fa-cog text-[11px]" style="color:var(--text-muted)"></i>
+            </div>
+
+            <div class="mt-4 px-2 space-y-4" id="stats-disk">
+                <!-- Widget Disque -->
+                <div class="dash-card-mini p-2 rounded-xl bg-white/5 border border-white/10">
+                    <div class="flex justify-between text-[10px] font-bold uppercase mb-1.5 init-color" data-color="var(--text-secondary)">
+                        <span class="flex items-center"><i class="fas fa-hdd mr-1.5 opacity-60"></i> Stockage</span>
+                        <span class="init-color" data-color="var(--accent)">{{ stats.disk_percent }}%</span>
+                    </div>
+                    <div class="progress-bar mb-1"><div class="progress-fill init-width" data-width="{{ stats.disk_percent }}%"></div></div>
+                    <div class="text-[9px] font-medium opacity-50 flex justify-between">
+                        <span>{{ stats.disk_used }}</span>
+                        <span>{{ stats.disk_total }} total</span>
+                    </div>
+                </div>
+
+                <!-- Widget Santé (SMART) -->
+                <div class="flex items-center justify-between px-2 py-1.5 rounded-lg bg-green-500/5 border border-green-500/10">
+                    <span class="text-[10px] font-bold uppercase text-green-500/80">Santé Disque</span>
+                    <span class="text-[9px] font-bold text-green-500 bg-green-500/10 px-1.5 py-0.5 rounded-md">OPTIMAL</span>
+                </div>
+            </div>
+
+            <form id="logoutForm" method="POST" action="/logout" class="mt-3 w-full">
+                <button type="submit" class="w-full flex items-center justify-center py-2 rounded-lg text-[11px] font-bold text-red-400 transition-all" onmouseover="this.style.background='rgba(239,68,68,0.06)'" onmouseout="this.style.background='transparent'">
+                    <i class="fas fa-arrow-right-from-bracket mr-2"></i> Déconnexion
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+    <main class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden relative z-0 anim-scaleIn" id="dropZone">
+        <!-- Toolbar -->
+        <header class="h-14 flex items-center justify-between px-5 border-b" style="border-color:var(--border-glass)">
+            <div class="flex items-center gap-2 text-[13px] font-medium" style="color:var(--text-secondary)" id="breadcrumb-trail">
+                <!-- Mobile hamburger -->
+                <button onclick="toggleSidebar()" class="w-9 h-9 lg:hidden flex items-center justify-center rounded-xl bg-[var(--bg-glass-hover)] border border-[var(--border-glass)] shadow-sm">
+                    <i class="fas fa-bars-staggered text-sm"></i>
+                </button>
+                <a href="/" class="spa-link p-1 rounded transition-all hover:text-[var(--accent)]" 
+                   >
+                    <i class="fas fa-house text-[11px]"></i>
+                </a>
+                {% for bc in breadcrumbs %}
+                <i class="fas fa-chevron-right text-[8px]" style="color:var(--text-muted)"></i>
+                <a href="/?path={{ bc.path }}" class="spa-link px-1.5 py-0.5 rounded hover:text-[var(--accent)] transition-colors"
+                   >
+                   {{ bc.name }}
+                </a>
+                {% endfor %}
+            </div>
+
+            <div class="flex items-center gap-2.5" id="toolbar-actions">
+                <span id="explorer-status" class="explorer-status" aria-live="polite"></span>
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style="color:var(--text-muted)"></i>
+                    <input type="text" id="searchInput" placeholder="Rechercher..." class="search-box pl-8">
+                </div>
+
+                <button id="viewToggleBtn" onclick="toggleView()" class="btn-ghost text-[14px] w-9 h-9 flex items-center justify-center p-0">
+                    <i class="fas fa-th-large"></i>
+                </button>
+
+                {% if current_path == '.Corbeille' %}
+                <button onclick="fetchAction('/trash/empty', 'post')" class="px-3.5 py-2 bg-red-500 text-white rounded-lg font-bold text-[12px] shadow-md shadow-red-500/20 transition-all hover:bg-red-600">
+                    <i class="fas fa-fire mr-1.5"></i>Vider
+                </button>
+                {% else %}
+                <button onclick="showDialog('mkdirModal')" class="btn-ghost text-[12px] px-4 py-2 flex items-center gap-2">
+                    <i class="fas fa-folder-plus text-[14px]"></i>
+                    <span class="font-bold">Nouveau</span>
+                </button>
+                <button onclick="document.getElementById('fileUpload').webkitdirectory=false; document.getElementById('fileUpload').click()" class="btn-primary text-[12px] px-4 py-2 flex items-center gap-2">
+                    <i class="fas fa-file-arrow-up text-[14px]"></i>
+                    <span class="font-bold">Importer</span>
+                </button>
+                <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data" class="hidden">
+                    <input type="hidden" name="path" value="{{ current_path }}">
+                    <input type="file" id="fileUpload" name="files" multiple onchange="submitUpload()">
+                </form>
+                {% endif %}
+            </div>
+        </header>
+
+        <!-- File List -->
+        <div id="file-grid-zone" class="flex-1 overflow-auto" style="max-height: 100%; min-height: 0;" oncontextmenu="handleDesktopContextMenu(event)">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="text-[10px] uppercase tracking-[0.08em] font-bold" style="color:var(--text-muted)">
+                        <th class="px-5 py-3 border-b w-[52%]" style="border-color:var(--border-glass)">Nom</th>
+                        <th class="px-5 py-3 border-b text-right hidden sm:table-cell" style="border-color:var(--border-glass)">Modifié</th>
+                        <th class="px-5 py-3 border-b text-right hidden sm:table-cell" style="border-color:var(--border-glass)">Taille</th>
+                        <th class="px-5 py-3 border-b hidden sm:table-cell" style="border-color:var(--border-glass)">Propriétaire</th>
+                        <th class="px-5 py-3 border-b w-12" style="border-color:var(--border-glass)"></th>
+                    </tr>
+                </thead>
+                <tbody id="fileGrid">
+                    {% if current_path %}
+                    <tr class="file-row cursor-pointer border-b" style="border-color:var(--border-glass)" 
+                        ondblclick="navigateTo('/?path={{ parent_path }}')">
+                        <td class="px-5 py-4 font-medium" style="color:var(--text-secondary)">
+                            <div class="flex items-center"><i class="fas fa-level-up-alt mx-2 mr-6 text-[20px]" style="color:var(--text-muted)"></i>..</div>
+                        </td>
+                        <td class="hidden sm:table-cell"></td><td class="hidden sm:table-cell"></td><td class="hidden sm:table-cell"></td><td></td>
+                    </tr>
+                    {% endif %}
+                    {% for f in files %}
+                    {% set is_dir_val = 'true' if f.is_dir else 'false' %}
+                    <tr class="file-row cursor-pointer border-b group transition-colors"
+                        style="border-color:var(--border-glass)"
+                        draggable="true"
+                        data-name="{{ f.name }}" 
+                        data-path="{{ f.relative_path }}" 
+                        data-isdir="{{ is_dir_val }}" 
+                        data-ext="{{ f.extension }}" 
+                        data-ispinned="{{ 'true' if f.is_pinned else 'false' }}"
+                        data-isvault="{{ 'true' if f.is_vault else 'false' }}"
+                        >
+
+
+                        
+                        <td class="px-5 py-3 relative" style="color:var(--text-primary)">
+                            <div class="flex items-center relative">
+                                <!-- Icône iPhone Files style -->
+                                <div class="flex items-center justify-center w-10 h-10 shrink-0 mr-4 transition-transform group-hover:scale-105">
+                                    {% if f.emoji %}
+                                        <span class="text-[32px] max-sm:text-[40px] drop-shadow-md">{{ f.emoji }}</span>
+                                    {% else %}
+                                        {% set icon_color = f.color if f.color else ('#5c9aff' if f.is_dir else 'var(--text-muted)') %}
+                                        {% set icon_class = 'fa-folder' if f.is_dir else 'fa-file-alt' %}
+                                        <i class="fas {{ icon_class }} text-[24px] max-sm:text-[34px] drop-shadow-sm init-color" data-color="{{ icon_color }}"></i>
+
+                                    {% endif %}
+
+                                </div>
+                                <!-- Content text -->
+                                <div class="flex flex-col w-full min-w-0 pr-12 max-sm:pr-14 grid-center-text">
+                                    <div class="truncate text-[13px] sm:text-[13px] max-sm:text-[16px] font-medium sm:font-medium max-sm:font-semibold leading-tight max-sm:mb-1 max-sm:-tracking-[0.3px]">{{ f.name }}</div>
+                                    <!-- Meta data (Mobile only) -->
+                                    <div class="flex items-center gap-2 text-[12px] font-normal sm:hidden opacity-60">
+                                        <span>{{ f.modified.split()[0] }}</span>
+                                        <span>•</span>
+                                        <span>{{ f.size }}</span>
+                                        {% if f.is_pinned %}<i class="fas fa-thumbtack text-[9px]" style="color:var(--accent)"></i>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Pinned & Vault icons (Top-Right) -->
+                            <div class="absolute right-2 top-2 flex items-center gap-1.5 z-10">
+                                {% if f.is_vault %}<i class="fas fa-shield-halved text-[10px]" style="color:var(--accent)"></i>{% endif %}
+                                {% if f.is_pinned %}<i class="fas fa-thumbtack text-[10px]" style="color:var(--accent)"></i>{% endif %}
+                            </div>
+                            
+                            <!-- 3 dots (Mobile only) -->
+                            <button onclick="handleContextMenu(event, this.closest('tr')); event.stopPropagation();" class="absolute right-2 top-1/2 -translate-y-1/2 hidden max-sm:flex w-10 h-10 items-center justify-center rounded-full text-gray-500 hover:bg-gray-400/10 active:bg-gray-400/20 active:scale-95 transition-all">
+                                <i class="fas fa-ellipsis-v text-[18px]"></i>
+                            </button>
+                        </td>
+
+                        <td class="px-5 py-3 hidden sm:table-cell">
+                            <div class="flex items-center text-[12px] font-medium" style="color:var(--text-secondary)">
+                                {% if user.avatar %}
+                                <img src="{{ user.avatar }}" class="w-5 h-5 rounded-full object-cover mr-2">
+                                {% else %}
+                                <div class="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 text-white flex items-center justify-center text-[9px] font-bold mr-2">{{ user.username[0]|upper }}</div>
+                                {% endif %}
+                                moi
+                            </div>
+                        </td>
+                        <td class="px-5 py-3 text-right text-[12px] hidden sm:table-cell" style="color:var(--text-muted)">{{ f.modified.split()[0] }}</td>
+                        <td class="px-5 py-3 text-right text-[12px] font-medium hidden sm:table-cell" style="color:var(--text-muted)">
+                            {{ f.size }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if not files %}
+            <div class="flex flex-col items-center justify-center w-full mt-20 mb-20 opacity-60 pointer-events-none">
+                <div class="w-24 h-24 mb-4 rounded-full flex items-center justify-center bg-gray-500/5">
+                    {% if current_path == '.Corbeille' %}
+                    <i class="fas fa-trash-alt text-5xl" style="color:var(--text-muted)"></i>
+                    {% else %}
+                    <i class="fas fa-folder-open text-5xl" style="color:var(--text-muted)"></i>
+                    {% endif %}
+                </div>
+                {% if current_path == '.Corbeille' %}
+                <p class="text-[15px] font-semibold" style="color:var(--text-secondary)">La corbeille est vide</p>
+                {% else %}
+                <p class="text-[15px] font-semibold" style="color:var(--text-secondary)">Ce dossier est vide</p>
+                <p class="text-[13px] mt-1" style="color:var(--text-muted)">Glissez-déposez vos fichiers ici</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <!-- ─── Transfer Panel ─── -->
+    <div id="transferPanel" class="transfer-panel">
+        <div class="transfer-header">
+            <span>Transferts en cours</span>
+            <button onclick="document.getElementById('transferPanel').classList.remove('active')" class="opacity-50 hover:opacity-100"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="transferList" class="transfer-list">
+            <!-- Dynamic items here -->
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ CONTEXT MENU ═══════════════ -->
+<div id="contextMenu" class="ctx-menu hidden fixed z-[200]">
+    <div id="cm-open" class="ctx-item" onclick="cmExecute()"><i class="fas fa-arrow-up-right-from-square"></i>Ouvrir</div>
+    <a id="cm-download" href="#" class="ctx-item"><i class="fas fa-download"></i>Télécharger</a>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="cmAction('renameModal')"><i class="fas fa-pen"></i>Renommer</div>
+    <div class="ctx-item" onclick="cmAction('moveModal')"><i class="fas fa-folder-open"></i>Déplacer</div>
+    <div class="ctx-item" onclick="cmAction('metaModal')"><i class="fas fa-palette"></i>Personnaliser</div>
+    <div id="cm-share" class="ctx-item" onclick="cmAction('sendModal')"><i class="fas fa-paper-plane"></i>Envoyer</div>
+    <div class="ctx-item" onclick="cmAction('shareExternalModal')"><i class="fas fa-link"></i>Lien public</div>
+    <div id="cm-vault" class="ctx-item" onclick="cmAction('vaultModal')"><i class="fas fa-shield-halved"></i>Coffre-fort</div>
+    <div class="ctx-sep cm-img-only hidden"></div>
+    <div class="ctx-item cm-img-only hidden" onclick="setNASAsset('bg')"><i class="fas fa-image"></i>Fond d'écran</div>
+    <div class="ctx-item cm-img-only hidden" onclick="setNASAsset('avatar')"><i class="fas fa-user-circle"></i>Photo de profil</div>
+    <div id="cm-restore" class="ctx-item ctx-success hidden" onclick="cmRestore()"><i class="fas fa-rotate-left"></i>Restaurer</div>
+    <div class="ctx-sep"></div>
+    <div id="cm-delete" class="ctx-item ctx-danger" onclick="cmDelete()"><i class="fas fa-trash"></i><span id="cm-delete-text">Supprimer</span></div>
+</div>
+
+<!-- ═══════════════ DESKTOP CONTEXT MENU ═══════════════ -->
+<div id="desktopContextMenu" class="ctx-menu hidden fixed z-[200]">
+    <div class="ctx-item" onclick="navigateTo(window.location.href, false)"><i class="fas fa-sync-alt"></i>Actualiser</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="showDialog('mkdirModal')"><i class="fas fa-folder-plus"></i>Nouveau Dossier</div>
+    <div class="ctx-item" onclick="document.getElementById('fileUpload').click()"><i class="fas fa-file-arrow-up"></i>Importer des fichiers</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="showDialog('settingsModal')"><i class="fas fa-cog"></i>Paramètres</div>
+</div>
+
+<!-- ═══════════════ SELECTION DOCK (BOTTOM) ═══════════════ -->
+<div id="selection-bar" class="fixed bottom-8 left-1/2 -translate-x-1/2 rounded-full px-4 py-2.5 flex items-center justify-center gap-3 z-[90] border pointer-events-none opacity-0 translate-y-12 transition-all duration-500 ease-out" style="background:rgba(20,20,30,0.75); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); border-color:rgba(255,255,255,0.1); box-shadow:0 20px 40px -10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)">
+    <button onclick="clearSelection(); updateSelectionBar();" class="w-8 h-8 rounded-full flex items-center justify-center pointer-events-auto transition-transform hover:scale-110 active:scale-90 text-white/50 hover:text-white hover:bg-white/10"><i class="fas fa-times text-[14px]"></i></button>
+    <div class="text-[13px] font-bold text-white px-1 tracking-wide" id="sel-count">1 sélectionné</div>
+    <div class="h-6 w-px mx-1 bg-white/10"></div>
+    <div class="flex items-center gap-1.5 pointer-events-auto">
+        <button onclick="cmAction('sendModal')" id="sel-share" class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 text-white/80 hover:text-white hover:bg-white/10" title="Partager"><i class="fas fa-user-plus text-[16px]"></i></button>
+        <button onclick="multiDownload()" class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 text-white/80 hover:text-white hover:bg-white/10 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20" title="Télécharger"><i class="fas fa-download text-[16px]"></i></button>
+        <button onclick="cmAction('moveModal')" class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 text-white/80 hover:text-white hover:bg-white/10" title="Déplacer"><i class="fas fa-folder-open text-[16px]"></i></button>
+        <button onclick="cmDelete()" class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 text-red-500 hover:text-red-400 hover:bg-red-500/20" title="Supprimer"><i class="fas fa-trash text-[16px]"></i></button>
+        <div class="h-6 w-px mx-1 bg-white/10 block max-sm:hidden"></div>
+        <button onclick="handleContextMenu(event, Array.from(selectedRows)[0]); event.stopPropagation();" class="w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-90 block max-sm:hidden text-white/80 hover:text-white hover:bg-white/10" title="Plus d'actions"><i class="fas fa-ellipsis-v text-[16px]"></i></button>
+    </div>
+</div>
+
+<!-- ═══════════════ MODALS ═══════════════ -->
+<!-- Mkdir -->
+<div id="mkdirModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('mkdirModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-sm" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-folder-plus" style="color:var(--accent)"></i>Nouveau Dossier</div>
+        <div class="modal-body"><input type="text" id="mkdirInput" placeholder="Nom du dossier..." class="input" onkeydown="if(event.key==='Enter')submitMkdir()"></div>
+        <div class="modal-footer">
+            <button onclick="hideDialog('mkdirModal')" class="btn-ghost">Annuler</button>
+            <button onclick="submitMkdir()" class="btn-primary">Créer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Rename -->
+<div id="renameModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('renameModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-sm" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-pen" style="color:var(--accent)"></i>Renommer</div>
+        <div class="modal-body"><input type="text" id="renameInput" class="input" onkeydown="if(event.key==='Enter')submitRename()"></div>
+        <div class="modal-footer">
+            <button onclick="hideDialog('renameModal')" class="btn-ghost">Annuler</button>
+            <button onclick="submitRename()" class="btn-primary">Sauvegarder</button>
+        </div>
+    </div>
+</div>
+
+<!-- Move -->
+<div id="moveModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('moveModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[26rem]" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-arrow-right" style="color:var(--accent)"></i>Déplacer</div>
+        <div class="modal-body">
+            <p class="text-[12px] mb-3" style="color:var(--text-muted)">Choisissez le dossier de destination.</p>
+            <div class="flex gap-2">
+                <input type="text" id="moveInput" placeholder="Racine" class="input flex-1" readonly>
+                <button type="button" onclick="openMovePicker()" class="btn-ghost px-3" title="Parcourir les dossiers"><i class="fas fa-folder-tree"></i></button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="hideDialog('moveModal')" class="btn-ghost">Annuler</button>
+            <button onclick="submitMove()" class="btn-primary"><i class="fas fa-folder-open mr-1.5"></i>Déplacer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Send -->
+<div id="sendModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('sendModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[26rem]" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-paper-plane" style="color:var(--accent)"></i>Envoyer à la famille</div>
+        <form action="/send" method="post" onsubmit="submitSPAForm(event)">
+            <div class="modal-body">
+                <p class="text-[12px] mb-3" style="color:var(--text-muted)">Envoyer une copie de <strong id="sendItemName" style="color:var(--text-primary)"></strong> à :</p>
+                <input type="hidden" name="filepath" id="sendInputFile">
+                <input type="hidden" name="path" value="{{ current_path }}">
+                <select name="target_username" class="input">
+                    {% for sys_user in all_users %}
+                        {% if sys_user.username != user.username %}
+                        <option value="{{ sys_user.username }}">{{ sys_user.username }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" onclick="hideDialog('sendModal')" class="btn-ghost">Annuler</button>
+                <button type="submit" class="btn-primary"><i class="fas fa-paper-plane mr-1.5"></i>Envoyer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Share External -->
+<div id="shareExternalModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('shareExternalModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[26rem]" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-link" style="color:var(--accent)"></i>Lien Public Temporaire</div>
+        <div class="modal-body space-y-4">
+            <p class="text-[12px]" style="color:var(--text-muted)">Générer un lien de téléchargement direct pour : <strong id="shareExternalName" style="color:var(--text-primary)"></strong></p>
+            <div id="shareLinkContainer" class="hidden p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                <div class="flex gap-2">
+                    <input type="text" id="shareExternalInput" readonly class="input flex-1 font-mono text-[11px] bg-white/50">
+                    <button onclick="copyToClipboard('shareExternalInput')" class="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 text-white"><i class="fas fa-copy"></i></button>
+                </div>
+            </div>
+            <button id="generateShareBtn" onclick="generateShareLink()" class="btn-primary w-full py-3">Générer le lien (7 jours)</button>
+        </div>
+        <div class="modal-footer">
+            <button onclick="hideDialog('shareExternalModal')" class="btn-ghost">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<!-- Vault -->
+<div id="vaultModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('vaultModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[24rem]" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-shield-halved" style="color:var(--accent)"></i>Gestion du Coffre-fort</div>
+        <div class="modal-body space-y-4">
+            <p class="text-[12px]" style="color:var(--text-muted)">Le chiffrement AES-256 protège vos données. <br><strong>Attention :</strong> Si vous perdez le mot de passe, les données seront irrécupérables.</p>
+            <input type="password" id="vaultPassword" placeholder="Mot de passe du coffre..." class="input">
+            <div id="vaultStatusMsg" class="text-[11px] font-bold hidden"></div>
+        </div>
+        <div class="modal-footer">
+            <button onclick="hideDialog('vaultModal')" class="btn-ghost">Annuler</button>
+            <button id="vaultActionBtn" onclick="submitVaultAction()" class="btn-primary">Sécuriser</button>
+        </div>
+    </div>
+</div>
+
+<!-- Meta (Customize) -->
+<div id="metaModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('metaModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[24rem]" onclick="event.stopPropagation()">
+        <div class="modal-header justify-between">
+            <div class="flex items-center gap-2.5"><i class="fas fa-palette" style="color:var(--accent)"></i><span id="metaItemName">Dossier</span></div>
+            <button onclick="hideDialog('metaModal')" class="w-7 h-7 rounded-lg flex items-center justify-center transition-all" style="color:var(--text-muted)" onmouseover="this.style.background='var(--row-hover)'" onmouseout="this.style.background='transparent'"><i class="fas fa-times text-[11px]"></i></button>
+        </div>
+        <div class="modal-body space-y-7">
+            <section>
+                <label class="block text-[10px] uppercase font-black tracking-widest text-indigo-500 mb-4">Couleur thématique</label>
+                <div class="grid grid-cols-4 gap-3">
+                    <button onclick="submitMeta('color', 'reset')" class="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 hover:border-gray-400 transition-all"><i class="fas fa-ban"></i></button>
+                    {% for color in ['#6366f1', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#64748b'] %}
+                    <button onclick="submitMeta('color', '{{ color }}')" class="w-12 h-12 rounded-2xl shadow-sm hover:scale-110 active:scale-95 transition-all ring-2 ring-transparent hover:ring-indigo-300 init-bg" data-bg="{{ color }}"></button>
+
+
+                    {% endfor %}
+                </div>
+            </section>
+            <section>
+                <label class="block text-[10px] uppercase font-black tracking-widest text-[#a855f7] mb-4">Icône expressive</label>
+                <div class="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
+                    <button onclick="submitMeta('emoji', 'reset')" class="w-11 h-11 rounded-xl bg-gray-50 flex items-center justify-center text-gray-300 border border-gray-100 hover:bg-gray-100"><i class="fas fa-rotate-left text-[11px]"></i></button>
+                    {% for emoji in ['⭐', '📂', '💼', '🏡', '🎮', '🎬', '📸', '🔒', '🚀', '🛠️', '🎵', '📚', '🔥', '🌈', '🎨', '🎬', '🎵', '📚', '🏠', '☁️', '⚙️', '💎', '🍎', '📍', '💡', '🔑', '🛡️', '⚡', '🎁', '🏆', '📌', '📎'] %}
+                    <button onclick="submitMeta('emoji', '{{ emoji }}')" class="w-11 h-11 rounded-xl glass flex items-center justify-center text-xl transition-all hover:scale-110 active:scale-95 hover:bg-indigo-50">{{ emoji }}</button>
+                    {% endfor %}
+                </div>
+            </section>
+            <div class="flex gap-2.5 pt-4">
+                <button id="metaPinBtn" onclick="submitMeta('is_pinned', '1')" class="btn-primary flex-1 py-3.5"><i class="fas fa-thumbtack mr-2"></i>Épingler au menu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NAS Picker Modal -->
+<div id="nasPickerModal" class="modal-overlay hidden fixed inset-0 z-[150] flex items-center justify-center" onclick="closeNasPicker()">
+    <div class="modal-content modal-card w-[95vw] max-w-[40rem] max-h-[85vh] flex flex-col" onclick="event.stopPropagation()">
+        <div class="modal-header justify-between shrink-0">
+            <div class="flex items-center gap-2.5"><i class="fas fa-folder-open" style="color:var(--accent)"></i>Explorateur NAS</div>
+            <button onclick="closeNasPicker()" class="w-7 h-7 rounded-lg flex items-center justify-center" style="color:var(--text-muted)"><i class="fas fa-times text-[11px]"></i></button>
+        </div>
+        <div class="px-5 py-2 border-b text-[12px] font-bold flex items-center shrink-0" style="border-color:var(--border-glass);color:var(--text-secondary)">
+            <button onclick="nasPickerUp()" class="mr-3 hover:text-indigo-500"><i class="fas fa-level-up-alt"></i></button>
+            <span id="nasPickerPath">/</span>
+        </div>
+        <div id="nasPickerGrid" class="modal-body overflow-y-auto flex-1 p-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <!-- Rempli en JS -->
+        </div>
+        <div class="modal-footer shrink-0 justify-between items-center">
+            <div class="text-[10px]" style="color:var(--text-muted)">Images, PDF, texte, audio et vidéo</div>
+            <button onclick="closeNasPicker()" class="btn-ghost">Annuler</button>
+            <button id="nasPickerChooseFolder" onclick="selectCurrentMoveFolder()" class="btn-primary hidden"><i class="fas fa-folder-check mr-1.5"></i>Choisir ce dossier</button>
+        </div>
+    </div>
+</div>
+
+<!-- Admin -->
+<div id="adminModal" class="modal-overlay hidden fixed inset-0 z-[100] flex items-center justify-center" onclick="hideDialog('adminModal')">
+    <div class="modal-content modal-card w-[90vw] max-w-[28rem]" onclick="event.stopPropagation()">
+        <div class="modal-header"><i class="fas fa-users-cog text-amber-400"></i>Gestion Famille</div>
+        <div class="modal-body">
+            <form action="/admin/create-user" method="post" class="space-y-4" onsubmit="submitSPAForm(event)">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Utilisateur</label>
+                        <input type="text" name="username" required class="input">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Mot de passe</label>
+                        <input type="password" name="password" required class="input">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Email</label>
+                    <input type="email" name="email" required class="input">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Rôle</label>
+                    <select name="role" class="input">
+                        <option value="user">Membre</option>
+                        <option value="admin">Administrateur</option>
+                        {% if user.role == "superadmin" %}
+                        <option value="superadmin">Super Admin</option>
+                        {% endif %}
+                    </select>
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" onclick="hideDialog('adminModal')" class="btn-ghost">Fermer</button>
+                    <button type="submit" class="btn-primary"><i class="fas fa-user-plus mr-1.5"></i>Créer</button>
+                </div>
+            </form>
+            <div class="mt-6 pt-4 border-t" style="border-color:var(--border-glass)">
+                <h3 class="text-[10px] uppercase font-bold tracking-[0.1em] mb-3" style="color:var(--text-muted)"><i class="fas fa-users mr-1"></i>Membres</h3>
+                <div class="space-y-1.5 max-h-36 overflow-y-auto">
+                    {% for sys_user in all_users %}
+                    <div class="flex items-center justify-between p-2.5 rounded-xl transition-all" style="background:var(--bg-secondary)">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 text-white flex items-center justify-center text-[11px] font-bold mr-2.5 shadow-sm">{{ sys_user.username[0]|upper }}</div>
+                            <div>
+                                <div class="text-[13px] font-bold flex items-center gap-1.5" style="color:var(--text-primary)">
+                                    {{ sys_user.username }}
+                                    {% if sys_user.role == "superadmin" %}
+                                    <span class="px-1.5 py-0.5 rounded-md bg-indigo-500 text-white text-[8px] uppercase tracking-tighter">Grand Maître</span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-[10px]" style="color:var(--text-muted)">
+                                    {{ sys_user.email }} · 
+                                    <span class="{{ 'text-amber-500 font-extrabold' if sys_user.role == 'admin' else '' }} {{ 'text-indigo-500 font-extrabold' if sys_user.role == 'superadmin' else '' }}">
+                                        {{ sys_user.role|upper }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {# Logique de suppression hiérarchique : superadmin > admin > user #}
+                        {% if sys_user.username != user.username %}
+                            {% set can_del = false %}
+                            {% if user.role == 'superadmin' and sys_user.role != 'superadmin' %}
+                                {% set can_del = true %}
+                            {% elif user.role == 'admin' and sys_user.role == 'user' %}
+                                {% set can_del = true %}
+                            {% endif %}
+                            
+                            {% if can_del %}
+                            <form method="POST" action="/admin/delete-user/{{ sys_user.username }}" class="inline" onsubmit="return confirm('Confirmer la suppression de {{ sys_user.username }} ? (Action irréversible)')">
+                                <button type="submit" class="w-7 h-7 rounded-lg flex items-center justify-center text-red-400 transition-all hover:bg-red-50"><i class="fas fa-trash text-[10px]"></i></button>
+                            </form>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings -->
+<div id="settingsModal" class="modal-overlay hidden fixed inset-0 z-[120] flex items-center justify-center" onclick="hideDialog('settingsModal')">
+    <div class="modal-content modal-card w-[95vw] max-w-[42rem] max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+        <div class="modal-header justify-between">
+            <div class="flex items-center gap-2.5"><i class="fas fa-cog" style="color:var(--accent)"></i>Paramètres</div>
+            <button onclick="hideDialog('settingsModal')" class="w-7 h-7 rounded-lg flex items-center justify-center" style="color:var(--text-muted)"><i class="fas fa-times text-[11px]"></i></button>
+        </div>
+
+        <div class="flex border-b" style="border-color:var(--border-glass)">
+            <button class="tab-btn active px-5 py-3 text-[12px] font-bold transition-colors" style="color:var(--text-muted)" onclick="switchTab(event, 'tab-profile')">Profil</button>
+            <button class="tab-btn px-5 py-3 text-[12px] font-bold transition-colors" style="color:var(--text-muted)" onclick="switchTab(event, 'tab-appearance')">Apparence</button>
+            <button class="tab-btn px-5 py-3 text-[12px] font-bold transition-colors" style="color:var(--text-muted)" onclick="switchTab(event, 'tab-remote')">Accès Distant</button>
+            {% if user.role == "admin" or user.role == "superadmin" %}
+            <button class="tab-btn px-5 py-3 text-[12px] font-bold transition-colors" style="color:var(--text-muted)" onclick="switchTab(event, 'tab-system')">Système</button>
+            <button class="tab-btn px-5 py-3 text-[12px] font-bold transition-colors" style="color:var(--text-muted)" onclick="switchTab(event, 'tab-services')">Services</button>
+            {% endif %}
+        </div>
+
+        <div class="modal-body overflow-y-auto flex-1 custom-scrollbar" style="max-height: 65vh;">
+            <div id="tab-profile" class="tab-content active space-y-4">
+                <form action="/settings/profile" method="post" class="space-y-4" onsubmit="submitSPAForm(event)">
+                    <input type="hidden" name="theme" value="{{ user.theme }}">
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Avatar</label>
+                        <div class="flex gap-2">
+                            <input type="text" name="avatarUrl" id="avatarUrlInput" value="{{ user.avatar }}" class="input flex-1" placeholder="URL ou chemin NAS (/preview/...)">
+                            <button type="button" onclick="openNasPicker('avatarUrlInput')" class="btn-ghost text-[11px]" title="Choisir depuis le NAS"><i class="fas fa-folder-open"></i></button>
+                        </div>
+                        <p class="text-[10px] mt-1" style="color:var(--text-muted)"><i class="fas fa-info-circle mr-1"></i>URL externe ou utilisez le clic droit sur une image dans vos fichiers.</p>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Fond d'écran</label>
+                        <div class="flex gap-2">
+                            <input type="text" name="wallpaperUrl" id="wallpaperUrlInput" value="{{ user.wallpaper }}" class="input flex-1" placeholder="URL ou chemin NAS (/preview/...)">
+                            <button type="button" onclick="openNasPicker('wallpaperUrlInput')" class="btn-ghost text-[11px]" title="Choisir depuis le NAS"><i class="fas fa-folder-open"></i></button>
+                        </div>
+                        <p class="text-[10px] mt-1" style="color:var(--text-muted)"><i class="fas fa-info-circle mr-1"></i>Image (.jpg, .png) ou vidéo (.mp4). Utilisez le clic droit sur un fichier.</p>
+                    </div>
+                    <div class="flex justify-end"><button type="submit" class="btn-primary">Appliquer</button></div>
+                </form>
+            </div>
+
+            <div id="tab-appearance" class="tab-content space-y-4">
+                <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-3" style="color:var(--text-muted)">Thème de l'interface</label>
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="setTheme('light')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="light" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-white border border-gray-200 flex items-center justify-center"><i class="fas fa-sun text-amber-400"></i></div>Clair
+                    </button>
+                    <button onclick="setTheme('dark')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="dark" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-slate-900 border border-slate-700 flex items-center justify-center"><i class="fas fa-moon text-indigo-400"></i></div>Sombre
+                    </button>
+                    <button onclick="setTheme('cyberpunk')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="cyberpunk" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-[#0a0a12] border border-yellow-500/30 flex items-center justify-center"><i class="fas fa-bolt text-pink-500"></i></div>Cyberpunk
+                    </button>
+                    <button onclick="setTheme('matrix')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="matrix" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-[#000800] border border-green-500/20 flex items-center justify-center"><i class="fas fa-terminal text-green-400"></i></div>Matrix
+                    </button>
+                    <button onclick="setTheme('apple')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="apple" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-[#f5f5f7] border border-gray-200 flex items-center justify-center"><i class="fab fa-apple text-gray-800"></i></div>Apple
+                    </button>
+                    <button onclick="setTheme('minimal')" class="theme-selector p-3 rounded-xl border-2 transition-all text-center font-bold text-[11px]" data-theme-val="minimal" style="border-color:var(--border-glass);color:var(--text-primary)">
+                        <div class="w-10 h-10 rounded-lg mx-auto mb-2 bg-white border border-gray-300 flex items-center justify-center"><i class="fas fa-minus text-gray-900"></i></div>Minimal
+                    </button>
+                </div>
+            </div>
+
+            <div id="tab-remote" class="tab-content space-y-5">
+                <form action="/settings/remote" method="post" class="space-y-4" onsubmit="submitSPAForm(event)">
+                    <!-- Toggle d'activation principal -->
+                    <div class="flex items-center justify-between p-4 rounded-xl border border-dashed" style="border-color:var(--border-glass)">
+                        <div>
+                            <div class="text-[13px] font-bold" style="color:var(--text-primary)">GravityNAS Cloud Connect</div>
+                            <div class="text-[11px]" style="color:var(--text-muted)">Accès natif Internet pour tous les comptes</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="enabled" value="1" class="sr-only peer" {% if remote_enabled %}checked{% endif %} onchange="submitSPAForm({preventDefault:()=>{}, target: this.form})">
+                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                    </div>
+
+                    {% if remote_url %}
+                    <div class="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10">
+                        <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-2 text-indigo-500">Adresse Publique Officielle</label>
+                        <div class="flex gap-2">
+                            <input type="text" readonly value="{{ remote_url }}" class="input flex-1 font-mono text-[11px] bg-white/50" id="publicUrlInput">
+                            <button type="button" onclick="copyPublicUrl()" class="w-10 h-10 rounded-lg flex items-center justify-center bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:scale-105 transition-all">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% elif remote_enabled %}
+                    <div class="p-4 rounded-xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-3">
+                        <div class="w-2.5 h-2.5 rounded-full bg-amber-500 anim-pulse"></div>
+                        <div class="text-[11px] font-medium text-amber-600">Initialisation de la connexion Cloud Connect...</div>
+                    </div>
+                    {% endif %}
+
+                    <input type="hidden" name="provider" value="ngrok">
+
+                    <div class="space-y-4 pt-2">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Clé d'accès Ngrok (Authtoken)</label>
+                            <input type="password" name="token" value="{{ remote_token }}" class="input" placeholder="Collez votre token ici">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold tracking-[0.1em] mb-1.5" style="color:var(--text-muted)">Domaine Réservé</label>
+                            <input type="text" name="domain" value="{{ remote_domain }}" class="input" placeholder="Ex: fiber-landed-deprecate.ngrok-free.dev">
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-gray-500/5 text-[10px] leading-relaxed" style="color:var(--text-muted)">
+                        <i class="fas fa-info-circle mr-1"></i> <b>Système Unifié :</b> GravityNAS utilise désormais le tunnel Ngrok natif. Ce domaine sera l'adresse de référence pour tous les membres de la famille accédant au NAS à distance.
+                    </div>
+
+                    <div class="flex justify-end gap-2">
+                        <button type="submit" class="btn-primary">Mettre à jour la connexion</button>
+                    </div>
+                </form>
+            </div>
+
+            {% if user.role in ['admin', 'superadmin'] %}
+            <div id="tab-system" class="tab-content space-y-7">
+                <!-- Dashboard de Santé : Unifié -->
+                <div class="dash-card border-none bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white overflow-hidden relative">
+                    <div class="relative z-10">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="text-[10px] uppercase font-black tracking-widest text-emerald-400 opacity-80">Système GravityNAS v2.6</h3>
+                                <div class="text-2xl font-black mt-1">Moniteur de Santé</div>
+                            </div>
+                            <div class="flex items-center gap-4 text-right">
+                                <div>
+                                    <div class="text-[9px] uppercase font-bold text-slate-400">Temp de Service</div>
+                                    <div class="text-xs font-mono" id="uptime-val">{{ stats.uptime }}</div>
+                                </div>
+                                <div class="w-px h-8 bg-white/10"></div>
+                                <div>
+                                    <div class="text-[9px] uppercase font-bold text-slate-400">RAM Utilisée</div>
+                                    <div class="text-xs font-mono" id="ram-details">{{ stats.ram_used }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="h-32 -mx-4">
+                            <canvas id="healthChart"></canvas>
+                        </div>
+                    </div>
+                    <!-- Décoration de fond -->
+                    <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-500/10 blur-[80px] rounded-full"></div>
+                </div>
+
+                <!-- Maintenance & Contrôle -->
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="runSystemUpdate()" class="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center gap-4 transition-all hover:border-indigo-500 group">
+                        <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all"><i class="fas fa-microchip"></i></div>
+                        <div class="text-left">
+                            <div class="text-[13px] font-bold text-gray-900">Mise à jour</div>
+                            <div class="text-[10px] text-gray-400 font-medium">Vérifier Git Pull</div>
+                        </div>
+                    </button>
+                    <a href="/admin/system/backup" class="p-5 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center gap-4 transition-all hover:border-amber-500 group">
+                        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl group-hover:bg-amber-600 group-hover:text-white transition-all"><i class="fas fa-database"></i></div>
+                        <div class="text-left">
+                            <div class="text-[13px] font-bold text-gray-900">Sauvegarde</div>
+                            <div class="text-[10px] text-gray-400 font-medium">Exporter .DB</div>
+                        </div>
+                    </a>
+                </div>
+
+                <!-- Membres de la Famille -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-[10px] uppercase font-black tracking-widest text-gray-400 flex items-center">
+                             <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2"></span> Gestion des Membres
+                        </h3>
+                        <button onclick="showDialog('mkdirUserModal')" class="text-[10px] font-black text-indigo-500 hover:underline uppercase tracking-tighter">+ Inviter</button>
+                    </div>
+                    <div class="space-y-2">
+                        {% for u in all_users %}
+                        <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:border-indigo-200 transition-all group">
+                            <div class="flex items-center gap-3">
+                                <div class="relative">
+                                    {% if u.avatar %}
+                                    <img src="{{ u.avatar }}" class="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm">
+                                    {% else %}
+                                    <div class="w-9 h-9 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs border-2 border-white shadow-sm">{{ u.username[0]|upper }}</div>
+                                    {% endif %}
+                                    <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white"></div>
+                                </div>
+                                <div>
+                                    <div class="text-[12px] font-bold text-gray-800">{{ u.username }}</div>
+                                    <div class="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{{ u.role }}</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                {% if user.role == "superadmin" or (user.role == "admin" and u.role == "user") %}
+                                <form method="POST" action="/admin/delete-user/{{ u.username }}" onsubmit="return confirm('Supprimer ce membre ?')">
+                                    <button type="submit" class="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:bg-red-50 hover:text-red-500 transition-all"><i class="fas fa-trash-alt text-[10px]"></i></button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center text-xl"><i class="fas fa-terminal"></i></div>
+                    <div>
+                        <div class="text-[13px] font-bold text-gray-900">Accès de Secours (God Mode)</div>
+                        <div class="text-[11px] text-gray-500">Récupération par ligne de commande activée via <code>--reset</code>. L'envoi d'emails est désactivé pour une sécurité maximale.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tab-services" class="tab-content space-y-6">
+                <div>
+                    <h3 class="text-[10px] uppercase font-black tracking-widest text-[#ec4899] mb-5 flex items-center">
+                         <span class="w-1.5 h-1.5 rounded-full bg-[#ec4899] mr-2"></span> Services NAS Avancés
+                    </h3>
+                    <div class="space-y-4">
+                        <!-- FTP -->
+                        <div class="flex items-center justify-between p-4 rounded-xl border" style="border-color:var(--border-glass)">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#ec4899]/10 text-[#ec4899] flex items-center justify-center text-lg"><i class="fas fa-network-wired"></i></div>
+                                <div>
+                                    <div class="text-[13px] font-bold" style="color:var(--text-primary)">Serveur FTP</div>
+                                    <div class="text-[11px]" style="color:var(--text-muted)">Accès rapide pour transferts de fichiers classiques</div>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="service_ftp" class="sr-only peer" {% if service_statuses.ftp %}checked{% endif %} onchange="toggleNASService('ftp', this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ec4899]"></div>
+                            </label>
+                        </div>
+                        
+                        <!-- SMB -->
+                        <div class="flex items-center justify-between p-4 rounded-xl border" style="border-color:var(--border-glass)">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#06b6d4]/10 text-[#06b6d4] flex items-center justify-center text-lg"><i class="fas fa-folder-network"></i></div>
+                                <div>
+                                    <div class="text-[13px] font-bold" style="color:var(--text-primary)">Partage Windows (SMB)</div>
+                                    <div class="text-[11px]" style="color:var(--text-muted)">Monter le NAS comme un lecteur réseau natif</div>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="service_smb" class="sr-only peer" {% if service_statuses.smb %}checked{% endif %} onchange="toggleNASService('smb', this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#06b6d4]"></div>
+                            </label>
+                        </div>
+ 
+                        <!-- Plex -->
+                        <div class="flex items-center justify-between p-4 rounded-xl border" style="border-color:var(--border-glass)">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#eab308]/10 text-[#eab308] flex items-center justify-center text-lg"><i class="fas fa-play-circle"></i></div>
+                                <div>
+                                    <div class="text-[13px] font-bold" style="color:var(--text-primary)">Serveur Médias (Plex/DLNA)</div>
+                                    <div class="text-[11px]" style="color:var(--text-muted)">Diffusez vos vidéos et musiques sur TV intelligentes</div>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="service_plex" class="sr-only peer" {% if service_statuses.plex %}checked{% endif %} onchange="toggleNASService('plex', this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#eab308]"></div>
+                            </label>
+                        </div>
+ 
+                        <!-- Backup -->
+                        <div class="flex items-center justify-between p-4 rounded-xl border" style="border-color:var(--border-glass)">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-[#10b981]/10 text-[#10b981] flex items-center justify-center text-lg"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <div>
+                                    <div class="text-[13px] font-bold" style="color:var(--text-primary)">Sauvegarde Automatique (Rsync)</div>
+                                    <div class="text-[11px]" style="color:var(--text-muted)">Snapshots nocturnes et synchronisation cloud</div>
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="service_backup" class="sr-only peer" {% if service_statuses.backup %}checked{% endif %} onchange="toggleNASService('backup', this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#10b981]"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ ONBOARDING TUTORIAL ═══════════════ -->
+<div id="onboardingOverlay" class="modal-overlay fixed inset-0 z-[200] hidden flex-col items-center justify-center" style="background:rgba(0,0,0,0.7);backdrop-filter:blur(20px)">
+    <div class="w-full max-w-lg mx-4">
+        <!-- Step indicators -->
+        <div class="flex items-center justify-center gap-2 mb-8" id="onb-dots"></div>
+        
+        <!-- Card -->
+        <div id="onb-card" class="glass-panel rounded-3xl p-10 text-center" style="background:var(--bg-glass);border:1px solid var(--border-glass)">
+            <div id="onb-icon" class="w-24 h-24 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl shadow-2xl"></div>
+            <h2 id="onb-title" class="text-3xl font-black tracking-tight mb-3" style="color:var(--text-primary)"></h2>
+            <p id="onb-desc" class="text-sm leading-relaxed mb-8" style="color:var(--text-secondary)"></p>
+            
+            <div class="flex items-center gap-3">
+                <button id="onb-skip" onclick="closeOnboarding()" class="btn-ghost flex-shrink-0 text-[12px]">Passer</button>
+                <button id="onb-next" onclick="nextOnboardingStep()" class="btn-primary flex-1 py-3 text-[13px] font-bold">
+                    Suivant <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Overlay -->
+<div id="previewOverlay" class="modal-overlay fixed inset-0 z-[150] hidden flex-col items-center justify-center p-12 max-sm:p-4" onclick="closePreview()">
+    <div class="absolute top-0 left-0 w-full h-20 max-sm:h-16 flex items-center justify-between px-10 max-sm:px-4 pointer-events-none z-[160]">
+        <div class="text-white pointer-events-auto">
+            <div class="text-[10px] uppercase font-bold tracking-widest opacity-50 mb-0.5 max-sm:hidden">Aperçu du fichier</div>
+            <div id="previewTitle" class="text-xl max-sm:text-lg font-black tracking-tight preview-title truncate max-w-lg max-sm:max-w-xs">Fichier</div>
+        </div>
+        <div class="flex gap-3 max-sm:gap-2 pointer-events-auto mt-2 max-sm:mt-0">
+            <a id="previewDownloadBtn" href="#" class="w-11 h-11 max-sm:w-9 max-sm:h-9 rounded-xl max-sm:rounded-lg bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center text-white transition-all hover:scale-105 border border-white/10"><i class="fas fa-download max-sm:text-sm"></i></a>
+            <button onclick="closePreview()" class="w-11 h-11 max-sm:w-9 max-sm:h-9 rounded-xl max-sm:rounded-lg bg-white/10 hover:bg-red-500/80 backdrop-blur-md flex items-center justify-center text-white transition-all hover:scale-105 border border-white/10"><i class="fas fa-times max-sm:text-sm"></i></button>
+        </div>
+    </div>
+    <div id="previewContainer" class="max-w-7xl max-h-full flex items-center justify-center" onclick="event.stopPropagation()">
+        <!-- Content injected here -->
+    </div>
+</div>
+
+<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+<script>window.CURRENT_PATH = "{{ current_path }}";</script>
+<script>
+    // Initialize elements with dynamic styles from data attributes (to avoid IDE linting errors)
+    function initDynamicStyles() {
+        document.querySelectorAll('.init-width').forEach(el => { el.style.width = el.dataset.width; });
+        document.querySelectorAll('.init-color').forEach(el => { el.style.color = el.dataset.color; });
+        document.querySelectorAll('.init-bg').forEach(el => { el.style.background = el.dataset.bg; });
+    }
+    initDynamicStyles();
+</script>
+<script src="/static/app.js?v=2.7"></script>
+<script src="/static/js/explorer.js?v=3.1"></script>
+<script src="/static/js/naspicker.js?v=2.1"></script>
+<script>
+// ── Onboarding System ──
+const ONB_STEPS = [
+    {
+        icon: '<i class="fas fa-rocket text-white"></i>',
+        iconBg: 'linear-gradient(135deg, #6366f1, #a855f7)',
+        title: 'Bienvenue sur GravityNAS !',
+        desc: 'Votre espace de stockage personnel et sécurisé. Glissez-déposez vos fichiers, organisez vos dossiers et partagez en un clic avec votre famille.'
+    },
+    {
+        icon: '<i class="fas fa-folder-tree text-white"></i>',
+        iconBg: 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+        title: 'Votre Espace de Fichiers',
+        desc: 'Créez des dossiers, importez des fichiers par glisser-déposer, et utilisez le <b>clic droit</b> pour accéder aux options (renommer, déplacer, partager). Les <b>flèches du clavier</b> permettent de naviguer rapidement.'
+    },
+    {
+        icon: '<i class="fas fa-palette text-white"></i>',
+        iconBg: 'linear-gradient(135deg, #f43f5e, #ec4899)',
+        title: 'Personnalisez Tout',
+        desc: 'Allez dans <b>Paramètres</b> pour choisir parmi 6 thèmes (Cyberpunk, Matrix, Apple...), changer votre avatar, et définir un fond d\'écran personnalisé avec vos propres photos.'
+    },
+    {
+        icon: '<i class="fas fa-shield-halved text-white"></i>',
+        iconBg: 'linear-gradient(135deg, #22c55e, #10b981)',
+        title: 'Sécurité & Partage',
+        desc: 'Vos fichiers sont protégés par mot de passe. Utilisez la <b>Corbeille</b> pour supprimer en toute sécurité, et envoyez des fichiers à d\'autres membres depuis le menu contextuel.'
+    }
+];
+let onbStep = 0;
+
+function showOnboarding() {
+    const ov = document.getElementById('onboardingOverlay');
+    ov.classList.remove('hidden'); ov.classList.add('flex');
+    const dots = document.getElementById('onb-dots');
+    dots.innerHTML = ONB_STEPS.map((_,i) => `<div class="w-2 h-2 rounded-full transition-all duration-300" id="onb-dot-${i}" style="background:var(--border-glass)"></div>`).join('');
+    onbStep = 0;
+    renderOnboardingStep();
+}
+
+function renderOnboardingStep() {
+    const s = ONB_STEPS[onbStep];
+    const card = document.getElementById('onb-card');
+    card.style.animation = 'none'; card.offsetHeight;
+    card.style.animation = 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both';
+    
+    document.getElementById('onb-icon').innerHTML = s.icon;
+    document.getElementById('onb-icon').style.background = s.iconBg;
+    document.getElementById('onb-title').textContent = s.title;
+    document.getElementById('onb-desc').innerHTML = s.desc;
+    
+    // Dots
+    ONB_STEPS.forEach((_,i) => {
+        const dot = document.getElementById('onb-dot-' + i);
+        dot.style.background = i === onbStep ? 'var(--accent)' : 'var(--border-glass)';
+        dot.style.width = i === onbStep ? '20px' : '8px';
+    });
+    
+    // Button text
+    const btn = document.getElementById('onb-next');
+    if (onbStep === ONB_STEPS.length - 1) {
+        btn.innerHTML = 'C\'est parti ! <i class="fas fa-rocket ml-2"></i>';
+    } else {
+        btn.innerHTML = 'Suivant <i class="fas fa-arrow-right ml-2"></i>';
+    }
+}
+
+function nextOnboardingStep() {
+    if (onbStep < ONB_STEPS.length - 1) {
+        onbStep++;
+        renderOnboardingStep();
+    } else {
+        closeOnboarding();
+    }
+}
+
+function closeOnboarding() {
+    const ov = document.getElementById('onboardingOverlay');
+    ov.style.transition = 'opacity 0.4s ease';
+    ov.style.opacity = '0';
+    setTimeout(() => {
+        ov.classList.add('hidden'); ov.classList.remove('flex');
+        ov.style.opacity = '';
+    }, 400);
+    localStorage.setItem('gravity_onboarding_done', '1');
+}
+
+// Déclencher au premier lancement
+if (!localStorage.getItem('gravity_onboarding_done')) {
+    setTimeout(showOnboarding, 800);
+}
+</script>
+
+
+<script>
+    (function() {
+        const overlay = document.getElementById('snake-reveal-overlay');
+        const bars = overlay.querySelectorAll('.snake-bar-reveal');
+
+        if (new URLSearchParams(window.location.search).has('path')) {
+            overlay.remove();
+        } else {
+            // Speed up reveal: 600ms instead of 800ms
+            bars.forEach((bar, i) => {
+                const isEven = (i % 2 === 1);
+                bar.animate([
+                    { transform: 'translateX(0)', opacity: 1 },
+                    { transform: `translateX(${isEven ? '-100%' : '100%'})`, opacity: 1 }
+                ], {
+                    duration: 650,
+                    delay: 150 + (i * 80),
+                    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                    fill: 'forwards'
+                });
+            });
+            setTimeout(() => overlay.style.display = 'none', 1200);
+        }
+
+        // Logout Logic - optimized
+        document.getElementById('logoutForm')?.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = this;
+            overlay.style.display = 'grid';
+            
+            bars.forEach((bar, i) => {
+                const isEven = (i % 2 === 1);
+                bar.style.transformOrigin = isEven ? 'right' : 'left';
+                bar.animate([
+                    { transform: `translateX(${isEven ? '-100%' : '100%'})`, opacity: 1 },
+                    { transform: 'translateX(0)', opacity: 1 }
+                ], {
+                    duration: 600,
+                    delay: i * 80,
+                    easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+                    fill: 'forwards'
+                });
+            });
+            setTimeout(() => form.submit(), 850);
+        });
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+version: "3.8"
+services:
+  nas:
+    build: .
+    container_name: antigravity_nas
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nas_storage:/app/nas_storage
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Paris

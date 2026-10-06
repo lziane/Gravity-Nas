@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration — GravityNAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.5);
+        }
+        
+        body { 
+            font-family: 'Outfit', sans-serif;
+            background: #09090b;
+            color: #fafafa;
+            overflow: hidden;
+        }
+
+        /* Animated Mesh Gradient Background */
+        .mesh-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background-color: #09090b;
+            background-image: 
+                radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 0% 50%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 50%, hsla(253,16%,7%,1) 0, transparent 50%), 
+                radial-gradient(at 0% 100%, hsla(339,49%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 50% 100%, hsla(225,39%,30%,1) 0, transparent 50%), 
+                radial-gradient(at 100% 100%, hsla(253,16%,7%,1) 0, transparent 50%);
+            filter: blur(100px);
+            opacity: 0.8;
+            animation: meshMove 20s ease infinite alternate;
+        }
+
+        @keyframes meshMove {
+            0% { transform: scale(1) translate(0, 0); }
+            50% { transform: scale(1.1) translate(20px, -20px); }
+            100% { transform: scale(1) translate(-20px, 20px); }
+        }
+
+        /* Premium Glassmorphisme */
+        .glass-card {
+            background: rgba(15, 15, 20, 0.7);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.05);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .step-container {
+            display: none;
+            animation: slideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .step-active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(30px) scale(0.98); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+
+        @keyframes slideOut {
+            from { opacity: 1; transform: translateX(0) scale(1); }
+            to { opacity: 0; transform: translateX(-30px) scale(0.98); }
+        }
+
+        .input-premium {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .input-premium:focus {
+            outline: none;
+            background: rgba(99, 102, 241, 0.05);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+
+        .btn-premium {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-premium:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-premium:active {
+            transform: translateY(0);
+        }
+
+        /* Shine effect */
+        .btn-premium::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+            transform: skewX(-25deg);
+            transition: 0.7s;
+        }
+
+        .btn-premium:hover::after {
+            left: 150%;
+        }
+
+        .step-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            transition: all 0.4s ease;
+        }
+
+        .step-dot.active {
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+            width: 24px;
+        }
+
+        /* Theme selector */
+        .theme-card {
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .theme-card.selected {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Loader */
+        #final-loader {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+    <div class="mesh-bg"></div>
+
+    <!-- Main Container -->
+    <div id="setup-card" class="w-full max-w-xl glass-card rounded-[40px] p-8 md:p-12 relative overflow-hidden">
+        
+        <!-- Progress Bar -->
+        <div class="flex items-center justify-center space-x-3 mb-10">
+            <div class="step-dot active" id="dot-1"></div>
+            <div class="step-dot" id="dot-2"></div>
+            <div class="step-dot" id="dot-3"></div>
+        </div>
+
+        <form id="setup-form" action="/setup/process" method="post">
+            
+            <!-- STEP 1: IDENTITY -->
+            <div class="step-container step-active" id="step-1">
+                <div class="text-center mb-10">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-indigo-500/10 text-indigo-400 mb-6 border border-indigo-500/20 shadow-2xl">
+                        <i class="fas fa-satellite-dish text-3xl animate-pulse"></i>
+                    </div>
+                    <h1 class="text-4xl font-black tracking-tight mb-3">L'Identité</h1>
+                    <p class="text-white/50 text-sm font-medium">Comment souhaitez-vous être connu dans votre univers ?</p>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold text-white/30 uppercase tracking-widest mb-3 ml-2">Nom de l'Administrateur</label>
+                        <div class="relative group">
+                            <i class="fas fa-user absolute left-5 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-indigo-400 transition-colors"></i>
+                            <input type="text" name="username" id="username" required 
+                                   placeholder="Votre pseudo de maître"
+                                   class="w-full pl-14 pr-6 py-4 rounded-2xl input-premium text-white font-semibold placeholder:text-white/10">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-12">
+                    <button type="button" onclick="nextStep(2)" class="w-full py-4 btn-premium rounded-2xl font-bold text-lg flex items-center justify-center group">
+                        <span>Continuer</span>
+                        <i class="fas fa-arrow-right ml-3 group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 2: SECURITY -->
+            <div class="step-container" id="step-2">
+                <div class="text-center mb-10">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-emerald-500/10 text-emerald-400 mb-6 border border-emerald-500/20">
+                        <i class="fas fa-shield-halved text-3xl"></i>
+                    </div>
+                    <h1 class="text-4xl font-black tracking-tight mb-3">La Sécurité</h1>
+                    <p class="text-white/50 text-sm font-medium">Protégez votre GravityNAS contre les anomalies.</p>
+                </div>
+
+                <div class="space-y-6">
+
+
+                    <div>
+                        <label class="block text-xs font-bold text-white/30 uppercase tracking-widest mb-3 ml-2">Mot de Passe Maître</label>
+                        <div class="relative group">
+                            <i class="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-emerald-400 transition-colors"></i>
+                            <input type="password" name="password" id="password" required minlength="8"
+                                   placeholder="••••••••••••" oninput="checkPasswordStrength(this.value)"
+                                   class="w-full pl-14 pr-6 py-4 rounded-2xl input-premium text-white font-semibold placeholder:text-white/10">
+                        </div>
+                        <!-- Indicateur de force -->
+                        <div class="mt-3 space-y-2" id="pwd-strength">
+                            <div class="flex gap-1.5">
+                                <div class="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div id="str-bar-1" class="h-full w-0 rounded-full transition-all duration-500"></div></div>
+                                <div class="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div id="str-bar-2" class="h-full w-0 rounded-full transition-all duration-500"></div></div>
+                                <div class="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div id="str-bar-3" class="h-full w-0 rounded-full transition-all duration-500"></div></div>
+                                <div class="h-1 flex-1 rounded-full bg-white/10 overflow-hidden"><div id="str-bar-4" class="h-full w-0 rounded-full transition-all duration-500"></div></div>
+                            </div>
+                            <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-semibold">
+                                <span id="chk-len" class="text-white/20 transition-colors"><i class="fas fa-circle text-[6px] mr-1"></i>8 caractères min.</span>
+                                <span id="chk-upper" class="text-white/20 transition-colors"><i class="fas fa-circle text-[6px] mr-1"></i>1 majuscule</span>
+                                <span id="chk-num" class="text-white/20 transition-colors"><i class="fas fa-circle text-[6px] mr-1"></i>1 chiffre</span>
+                                <span id="chk-special" class="text-white/20 transition-colors"><i class="fas fa-circle text-[6px] mr-1"></i>1 spécial (!@#...)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-12 flex items-center space-x-4">
+                    <button type="button" onclick="nextStep(1)" class="w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-all">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button type="button" onclick="nextStep(3)" class="flex-1 py-4 btn-premium rounded-2xl font-bold text-lg flex items-center justify-center">
+                        <span>Sécuriser l'accès</span>
+                        <i class="fas fa-arrow-right ml-3"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- STEP 3: STYLE -->
+            <div class="step-container" id="step-3">
+                <div class="mb-8 p-5 rounded-3xl border border-white/10 bg-white/5">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-hard-drive text-indigo-400 mt-1"></i>
+                        <div class="min-w-0">
+                            <h2 class="font-bold">Espace de stockage</h2>
+                            <p class="text-xs text-white/50 mt-1 break-all">Disque par défaut : {{ storage_path }}</p>
+                            <p class="text-xs text-white/50 mt-1">{{ storage_free_gb }} Go libres sur {{ storage_total_gb }} Go</p>
+                        </div>
+                    </div>
+                    <label class="block text-xs font-bold text-white/30 uppercase tracking-widest mt-5 mb-2">Espace maximal pour l'administrateur</label>
+                    <div class="flex items-center gap-3">
+                        <input type="number" name="quota_gb" min="0" max="{{ storage_free_gb|int }}" value="0" class="w-full px-4 py-3 rounded-2xl input-premium text-white" aria-describedby="quota-help">
+                        <span class="text-sm text-white/50">Go</span>
+                    </div>
+                    <p id="quota-help" class="text-[10px] text-white/30 mt-2">0 signifie sans limite. Le disque est choisi automatiquement selon l'espace libre disponible.</p>
+                </div>
+                <div class="text-center mb-10">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-pink-500/10 text-pink-400 mb-6 border border-pink-500/20">
+                        <i class="fas fa-palette text-3xl"></i>
+                    </div>
+                    <h1 class="text-4xl font-black tracking-tight mb-3">Le Style</h1>
+                    <p class="text-white/50 text-sm font-medium">Choisissez l'apparence de votre interface.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="cursor-pointer group">
+                        <input type="radio" name="theme" value="dark" checked class="hidden" onchange="updateThemePreview(this)">
+                        <div class="theme-card selected p-6 rounded-3xl text-center transition-all group-hover:scale-105" id="theme-dark">
+                            <div class="w-12 h-12 bg-gray-900 rounded-xl mx-auto mb-3 border border-white/10 flex items-center justify-center"><i class="fas fa-moon text-indigo-400"></i></div>
+                            <div class="font-bold">Mode Sombre</div>
+                            <div class="text-[10px] text-white/30 uppercase mt-1">Espace profond</div>
+                        </div>
+                    </label>
+
+                    <label class="cursor-pointer group">
+                        <input type="radio" name="theme" value="light" class="hidden" onchange="updateThemePreview(this)">
+                        <div class="theme-card p-6 rounded-3xl text-center transition-all group-hover:scale-105" id="theme-light">
+                            <div class="w-12 h-12 bg-white rounded-xl mx-auto mb-3 border border-indigo-200 flex items-center justify-center"><i class="fas fa-sun text-orange-400"></i></div>
+                            <div class="font-bold text-white/80">Mode Clair</div>
+                            <div class="text-[10px] text-white/30 uppercase mt-1">Nébuleuse blanche</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="mt-12 flex items-center space-x-4">
+                    <button type="button" onclick="nextStep(2)" class="w-16 h-16 rounded-2xl border border-white/10 flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 transition-all">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button type="submit" class="flex-1 py-4 btn-premium rounded-2xl font-bold text-lg flex items-center justify-center bg-gradient-to-r from-indigo-500 to-purple-600">
+                        <span>Décoller !</span>
+                        <i class="fas fa-rocket ml-3"></i>
+                    </button>
+                </div>
+            </div>
+
+        </form>
+
+        <!-- Dynamic Success Message / Loader -->
+        <div id="final-loader" class="absolute inset-0 bg-[#09090b]/90 backdrop-blur-xl z-[100] flex flex-col items-center justify-center text-center p-12">
+            <div class="w-24 h-24 relative mb-8">
+                <div class="absolute inset-0 border-4 border-indigo-500/20 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <i class="fas fa-hdd absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-2xl text-indigo-400"></i>
+            </div>
+            <h2 class="text-3xl font-black mb-4">Initialisation...</h2>
+            <p class="text-white/50 max-w-xs">Nous préparons votre espace GravityNAS. Préparez-vous à l'hyper-espace.</p>
+        </div>
+
+        {% if "error" in request.query_params %}
+        <div class="absolute bottom-6 left-1/2 -translate-x-1/2 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-full text-red-400 text-xs font-bold">
+            <i class="fas fa-exclamation-triangle mr-2"></i> Erreur lors du déploiement.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- UI Background Elements -->
+    <div class="fixed top-0 left-0 w-full h-full pointer-events-none opacity-20 overflow-hidden">
+        <div class="absolute top-[20%] left-[10%] w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[120px]"></div>
+        <div class="absolute bottom-[20%] right-[10%] w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[120px]"></div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+
+        function nextStep(step) {
+            // Validation simple pour l'exemple
+            if (step > currentStep) {
+                const currentFields = document.querySelectorAll(`#step-${currentStep} input[required]`);
+                let valid = true;
+                currentFields.forEach(f => {
+                    if (!f.value || !f.checkValidity()) {
+                        f.classList.add('ring-2', 'ring-red-500/50');
+                        valid = false;
+                    } else {
+                        f.classList.remove('ring-2', 'ring-red-500/50');
+                    }
+                });
+                if (!valid) return;
+            }
+
+            // Animation de sortie
+            document.getElementById(`step-${currentStep}`).style.animation = 'slideOut 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+            
+            setTimeout(() => {
+                document.getElementById(`step-${currentStep}`).classList.remove('step-active');
+                document.getElementById(`step-${step}`).classList.add('step-active');
+                document.getElementById(`step-${step}`).style.animation = 'slideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards';
+                
+                // Update dots
+                document.querySelectorAll('.step-dot').forEach(d => d.classList.remove('active'));
+                document.getElementById(`dot-${step}`).classList.add('active');
+                
+                currentStep = step;
+            }, 400);
+        }
+
+        function updateThemePreview(radio) {
+            document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById(`theme-${radio.value}`).classList.add('selected');
+        }
+
+        document.getElementById('setup-form').onsubmit = function() {
+            document.getElementById('final-loader').style.display = 'flex';
+        };
+
+        function checkPasswordStrength(pwd) {
+            const checks = [
+                { id: 'chk-len', test: pwd.length >= 8 },
+                { id: 'chk-upper', test: /[A-Z]/.test(pwd) },
+                { id: 'chk-num', test: /[0-9]/.test(pwd) },
+                { id: 'chk-special', test: /[^A-Za-z0-9]/.test(pwd) }
+            ];
+            let score = 0;
+            checks.forEach(c => {
+                const el = document.getElementById(c.id);
+                if (c.test) {
+                    el.classList.remove('text-white/20');
+                    el.classList.add('text-emerald-400');
+                    score++;
+                } else {
+                    el.classList.remove('text-emerald-400');
+                    el.classList.add('text-white/20');
+                }
+            });
+            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-emerald-500'];
+            for (let i = 1; i <= 4; i++) {
+                const bar = document.getElementById('str-bar-' + i);
+                bar.className = 'h-full rounded-full transition-all duration-500';
+                if (i <= score) {
+                    bar.style.width = '100%';
+                    bar.classList.add(colors[score - 1]);
+                } else {
+                    bar.style.width = '0';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

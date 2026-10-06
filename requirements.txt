@@ -1,0 +1,37 @@
+# GravityNAS — Dépendances Python
+# Installables avec : pip install -r requirements.txt
+
+# --- Serveur Web ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20    # Nécessaire pour Form() et File()
+jinja2==3.1.4               # Moteur de templates HTML
+ngrok                       # Tunnel natif intégré au code
+
+# --- Monitoring système (optionnel mais recommandé) ---
+# Sur Raspberry Pi OS Lite : sudo apt install python3-psutil
+# OU :
+psutil==6.1.0
+gpiozero==2.0.1             # Pour le contrôle du ventilateur (Raspberry Pi)
+
+
+# --- Sécurité (inclus dans Python 3.6+, pas besoin d'installer) ---
+# hashlib, secrets, sqlite3 → stdlib Python
+
+# --- Email ---
+# smtplib → stdlib Python (aucune install)
+
+# --- OCR & Intelligence ---
+pytesseract==0.3.13
+PyPDF2==3.0.1
+Pillow==11.3.0
+
+# --- Sécurité Avancée ---
+cryptography==44.0.0
+pyotp==2.9.0                # Double authentification (MFA)
+zeroconf==0.136.0           # Découverte réseau locale (mDNS)
+pytest==8.0.0               # Framework de tests
+pytest-asyncio==0.23.5      # Tests asynchrones
+httpx==0.28.1               # TestClient FastAPI/Starlette
+
+# --- Desktop Packaging ---

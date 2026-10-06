@@ -1,0 +1,30 @@
+[Unit]
+Description=GravityNAS private NAS appliance
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=gravitynas
+Group=gravitynas
+WorkingDirectory=/opt/gravitynas/current
+EnvironmentFile=-/etc/gravitynas/gravitynas.env
+ExecStart=/opt/gravitynas/current/venv/bin/python /opt/gravitynas/current/main.py
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+UMask=0077
+
+# The service only needs to write its persistent data and storage paths.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+NoNewPrivileges=true
+RuntimeDirectory=gravitynas
+RuntimeDirectoryMode=0750
+ReadWritePaths=/var/lib/gravitynas
+ReadWritePaths=/run/gravitynas
+
+[Install]
+WantedBy=multi-user.target

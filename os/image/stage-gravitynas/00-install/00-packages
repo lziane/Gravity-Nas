@@ -1,0 +1,12 @@
+python3-venv
+python3-pip
+python3-psutil
+nginx
+samba
+samba-common-bin
+avahi-daemon
+rsync
+sqlite3
+curl
+openssl
+ca-certificates
